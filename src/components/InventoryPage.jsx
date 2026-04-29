@@ -124,10 +124,10 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="grid grid-cols-12 gap-8 items-start">
+    <div className="flex flex-col gap-6 sm:gap-8">
+      <div className="grid grid-cols-12 gap-6 md:gap-8 items-start">
         <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-          <div className="flex flex-col gap-4 border-b border-slate-200 pb-6">
+          <div className="flex flex-col gap-5 border-b border-slate-200 pb-6">
              <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tighter uppercase underline decoration-blue-500 decoration-4 underline-offset-8 shrink-0">Inventory</h2>
                 <button 
@@ -167,7 +167,7 @@ export default function InventoryPage() {
         </div>
 
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-          <div className="bg-slate-900 rounded-2xl p-6 sm:p-8 shadow-2xl flex flex-col items-center justify-center text-center border border-slate-800">
+          <div className="bg-slate-900 rounded-2xl p-6 sm:p-8 shadow-2xl flex flex-col items-center justify-center text-center border border-slate-800 self-stretch">
             <div className="hidden sm:flex w-32 h-32 bg-white p-3 rounded-xl mb-6 items-center justify-center relative shadow-inner">
               <div className="w-full h-full bg-slate-50 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-lg">
                 <Smartphone className="h-8 w-8 text-slate-200 mb-1" />
