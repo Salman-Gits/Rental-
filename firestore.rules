@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isDemoMode() {
+      return true; // Explicitly allow demo mode for company showcase
+    }
+
+    function isSignedIn() {
+      return request.auth != null || isDemoMode();
+    }
+    
+    function isEmailVerified() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'category', 'status', 'barcode', 'qrCode'])
+        && data.name is string && data.name.size() <= 200
+        && data.status in ['available', 'rented']
+        && data.barcode is string && data.barcode.size() <= 100;
+    }
+
+    function isValidRental(data) {
+      return data.keys().hasAll(['productId', 'userId', 'userEmail', 'startTime', 'status'])
+        && data.productId is string
+        && data.userEmail is string
+        && data.status in ['active', 'completed'];
+    }
+
+    // --- Collection Rules ---
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    match /rentals/{rentalId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+    }
+  }
+}

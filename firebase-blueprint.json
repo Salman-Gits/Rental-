@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "An electronic product available for rental",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the product" },
+        "category": { "type": "string", "description": "e.g., Laptop, Camera, Drone" },
+        "description": { "type": "string", "description": "Detailed description" },
+        "imageUrl": { "type": "string", "description": "URL to product image" },
+        "pricePerHour": { "type": "number", "description": "Rental cost per hour" },
+        "status": { "type": "string", "enum": ["available", "rented"], "description": "Current availability" },
+        "barcode": { "type": "string", "description": "Unique barcode string for check-in" },
+        "qrCode": { "type": "string", "description": "Unique QR string for checkout" },
+        "currentRentalId": { "type": "string", "description": "ID of active rental if any" }
+      },
+      "required": ["name", "category", "status", "barcode", "qrCode", "pricePerHour"]
+    },
+    "Rental": {
+      "title": "Rental",
+      "description": "A rental transaction record",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "description": "ID of the product being rented" },
+        "userId": { "type": "string", "description": "ID of the user who rented" },
+        "userEmail": { "type": "string", "description": "Email of the user" },
+        "startTime": { "type": "string", "format": "date-time", "description": "When the rental started" },
+        "endTime": { "type": "string", "format": "date-time", "description": "When the rental ended" },
+        "status": { "type": "string", "enum": ["active", "completed"], "description": "Current status" },
+        "totalDurationMinutes": { "type": "number", "description": "Calculated duration" },
+        "totalCost": { "type": "number", "description": "Calculated cost" }
+      },
+      "required": ["productId", "userId", "startTime", "status"]
+    }
+  },
+  "firestore": {
+    "products": {
+      "schema": "Product",
+      "description": "Collection of electronic products"
+    },
+    "rentals": {
+      "schema": "Rental",
+      "description": "History of rental transactions"
+    }
+  }
+}

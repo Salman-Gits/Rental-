@@ -1,0 +1,8 @@
+{
+  "name": "ElectroRent Pro",
+  "description": "Professional electronics rental and inventory management system with interactive QR-code checkout and barcode check-in tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
