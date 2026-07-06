@@ -1,0 +1,13 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin123",
+      "role": "Admin",
+      "fullName": "Admin Overseer",
+      "email": "admin@electrorent.com"
+    }
+  ],
+  "assets": [],
+  "logs": []
+}
