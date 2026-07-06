@@ -47,11 +47,12 @@ async function startServer() {
     const targetUrl = `${SPRING_BOOT_URL}/api${req.path}`;
     const headers = { ...req.headers };
     delete headers.host; // Remove host to avoid connection issues on proxy
+    delete headers["content-length"]; // Prevent Content-Length mismatches after JSON.stringify
 
     try {
-      // Direct Native Node fetch with standard timeout configuration to prevent premature mock fallback
+      // Direct Native Node fetch with short timeout to fall back quickly if offline
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
 
       const response = await fetch(targetUrl, {
         method: req.method,
@@ -78,24 +79,9 @@ async function startServer() {
         return res.send(text);
       }
     } catch (error) {
-      // Catch ECONNREFUSED or fetch errors indicating Spring Boot is offline/not started
-      const isOffline = error.name === "AbortError" || 
-                        error.code === "ECONNREFUSED" || 
-                        error.cause?.code === "ECONNREFUSED" || 
-                        error.message?.includes("fetch failed");
-
-      if (isOffline) {
-        // Fall back to handling the API calls directly inside Express!
-        console.log(`[Express API Gateway] Spring Boot offline at ${SPRING_BOOT_URL}. Handling request locally via high-fidelity fallback.`);
-        return next();
-      }
-
-      console.error("[Proxy Exception Error]", error);
-      return res.status(502).json({ 
-        error: "Bad Gateway", 
-        message: "Failed to connect to backend", 
-        details: error.message 
-      });
+      // Fall back to handling the API calls directly inside Express for any connection error
+      console.log(`[Express API Gateway] Spring Boot offline or error (${error.message}). Handling request locally via high-fidelity fallback.`);
+      return next();
     }
   });
 
