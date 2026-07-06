@@ -38,10 +38,21 @@ async function startServer() {
   // ==========================================
   // SPRING BOOT TRANSPARENT PROXY MIDDLEWARE
   // ==========================================
+  let isSpringBootOnline = null;
+
   app.use("/api", async (req, res, next) => {
     // Let the health endpoint run locally or serve as a status checker
     if (req.path === "/health") {
-      return res.json({ status: "ok", service: "ElectroRent Express Gateway" });
+      return res.json({ 
+        status: "ok", 
+        service: "ElectroRent Express Gateway",
+        springBootOnline: isSpringBootOnline === true
+      });
+    }
+
+    // If we've already detected that the Spring Boot server is offline, bypass fetch immediately
+    if (isSpringBootOnline === false) {
+      return next();
     }
 
     const targetUrl = `${SPRING_BOOT_URL}/api${req.path}`;
@@ -52,7 +63,7 @@ async function startServer() {
     try {
       // Direct Native Node fetch with short timeout to fall back quickly if offline
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
 
       const response = await fetch(targetUrl, {
         method: req.method,
@@ -62,6 +73,7 @@ async function startServer() {
       });
 
       clearTimeout(timeoutId);
+      isSpringBootOnline = true; // Set flag to true since fetch succeeded
 
       const contentType = response.headers.get("content-type") || "";
       res.status(response.status);
@@ -79,8 +91,9 @@ async function startServer() {
         return res.send(text);
       }
     } catch (error) {
-      // Fall back to handling the API calls directly inside Express for any connection error
-      console.log(`[Express API Gateway] Spring Boot offline or error (${error.message}). Handling request locally via high-fidelity fallback.`);
+      // Cache that Spring Boot is offline so we don't attempt expensive fetches on every call
+      isSpringBootOnline = false;
+      console.info("[Express API Gateway] Spring Boot integration inactive. Defaulting to local high-fidelity database fallback.");
       return next();
     }
   });
@@ -379,6 +392,45 @@ async function startServer() {
 
     await writeLocalDb(db);
     res.json(log);
+  });
+
+  // 12. Scanner Rapid Processing API (Supports instant camera check-in / check-out operations)
+  app.post("/api/scanner/process", async (req, res) => {
+    const { barcode } = req.body;
+    if (!barcode) {
+      return res.status(400).json({ message: "Barcode string is required for processing." });
+    }
+
+    const db = await readLocalDb();
+    
+    // Find asset
+    const asset = db.assets.find(a => a.barcode.toUpperCase() === barcode.trim().toUpperCase());
+    if (!asset) {
+      return res.status(404).json({ 
+        message: `Barcode '${barcode}' not found in the inventory database.`,
+        unregistered: true 
+      });
+    }
+
+    // Look for active logs (issued logs not checked in)
+    const activeLog = db.logs.find(l => l.barcode.toUpperCase() === barcode.trim().toUpperCase() && l.status === "Active");
+
+    if (activeLog) {
+      return res.json({
+        status: "success",
+        suggestedAction: "checkin",
+        asset,
+        activeLog,
+        message: `Asset '${asset.name}' is currently dispatched to ${activeLog.client}. Ready for return check-in.`
+      });
+    } else {
+      return res.json({
+        status: "success",
+        suggestedAction: "checkout",
+        asset,
+        message: `Asset '${asset.name}' is available in fleet stock. Ready for deployment dispatch.`
+      });
+    }
   });
 
   // ==========================================

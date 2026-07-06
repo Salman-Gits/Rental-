@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
+import { Scanner } from './Scanner';
 import { 
   ArrowLeft, 
   Barcode, 
@@ -15,13 +16,17 @@ import {
   Activity,
   UserCheck,
   ChevronRight,
-  ClipboardList
+  ClipboardList,
+  Camera
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 
 export default function CheckInPage() {
   const { logs, checkinAsset, role } = useApp();
   const navigate = useNavigate();
+
+  // Live Camera Scanner State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Find all barcode options currently checked out (Active status)
   const activeLogs = logs.filter(l => l.status === "Active");
@@ -186,8 +191,16 @@ export default function CheckInPage() {
                     placeholder="Or type/scan Barcode..."
                     value={formData.barcode}
                     onChange={handleChange}
-                    className={`w-full bg-slate-50 border ${errors.barcode ? 'border-red-300' : 'border-slate-200'} rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all`}
+                    className={`w-full bg-slate-50 border ${errors.barcode ? 'border-red-300' : 'border-slate-200'} rounded-xl pl-10 pr-12 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="absolute inset-y-1 right-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer"
+                    title="Scan Barcode or QR Code with live camera"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
               {errors.barcode && <p className="text-[10px] font-bold text-red-500">{errors.barcode}</p>}
@@ -397,6 +410,17 @@ export default function CheckInPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Live Camera Barcode/QR Scanner Modal */}
+      <Scanner
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={(scannedCode) => {
+          setFormData(prev => ({ ...prev, barcode: scannedCode }));
+          setIsScannerOpen(false);
+        }}
+        mode="checkin"
+      />
     </div>
   );
 }

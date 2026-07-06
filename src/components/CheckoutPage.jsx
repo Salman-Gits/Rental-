@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
+import { Scanner } from './Scanner';
 import { 
   ArrowLeft, 
   Barcode, 
@@ -15,12 +16,16 @@ import {
   AlertCircle, 
   Clock, 
   ShieldAlert,
-  ChevronRight
+  ChevronRight,
+  Camera
 } from 'lucide-react';
 
 export default function CheckoutPage() {
   const { assets, checkoutAsset, role } = useApp();
   const navigate = useNavigate();
+
+  // Live Camera Scanner State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Local Form state
   const [formData, setFormData] = useState({
@@ -163,8 +168,16 @@ export default function CheckoutPage() {
                     placeholder="Or type Barcode manually..."
                     value={formData.barcode}
                     onChange={handleChange}
-                    className={`w-full bg-slate-50 border ${errors.barcode ? 'border-red-300' : 'border-slate-200'} rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all`}
+                    className={`w-full bg-slate-50 border ${errors.barcode ? 'border-red-300' : 'border-slate-200'} rounded-xl pl-10 pr-12 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="absolute inset-y-1 right-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer"
+                    title="Scan Barcode or QR Code with live camera"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
               {errors.barcode && <p className="text-[10px] font-bold text-red-500">{errors.barcode}</p>}
@@ -417,6 +430,17 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {/* Live Camera Barcode/QR Scanner Modal */}
+      <Scanner
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={(scannedCode) => {
+          setFormData(prev => ({ ...prev, barcode: scannedCode }));
+          setIsScannerOpen(false);
+        }}
+        mode="checkout"
+      />
     </div>
   );
 }

@@ -27,24 +27,15 @@ export function Navbar() {
       {/* Upper Main Nav Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
-        {/* Left Side: Logo & Home Icon */}
-        <div className="flex items-center gap-4 shrink-0">
+        {/* Left Side: Logo */}
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/15">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/15 shrink-0">
               <Laptop className="h-4 w-4 text-white" />
             </div>
-            <span className="text-sm sm:text-base font-black tracking-widest text-white uppercase">
+            <span className="text-xs sm:text-base font-black tracking-widest text-white uppercase hidden xs:inline-block">
               ELECTRO<span className="text-blue-500">RENT</span>
             </span>
-          </Link>
-
-          {/* Home Icon on the Left side as requested */}
-          <Link 
-            to="/" 
-            className="p-2 bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-slate-700/50 hover:bg-slate-700 transition-all shadow-sm"
-            title="Go to Dashboard"
-          >
-            <Home className="h-4 w-4" />
           </Link>
         </div>
 
@@ -63,7 +54,7 @@ export function Navbar() {
         </div>
 
         {/* Right Side: Role Switcher, Home Button & Operator Badge */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
           {/* Active Role Switcher / Authentication Flow */}
           {role === 'Admin' ? (
@@ -74,34 +65,36 @@ export function Navbar() {
                 toast.info("Logged out from Admin Console. Interface restricted to Operator mode.");
                 navigate('/');
               }}
-              className="px-2.5 py-1.5 bg-red-600/10 border border-red-500/20 text-red-400 hover:bg-red-600/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5"
+              className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 bg-red-600/10 border border-red-500/20 text-red-400 hover:bg-red-600/20 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shrink-0"
               title="Click to logout from Admin Console"
             >
-              <LogOut className="h-3.5 w-3.5" />
-              <span>Admin (Logout)</span>
+              <LogOut className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden xxs:inline">Logout</span>
             </button>
           ) : (
             <button
               onClick={() => navigate('/login')}
-              className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+              className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm shrink-0"
               title="Click to login as Administrator"
             >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Admin Login</span>
+              <ShieldCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden xxs:inline">Login</span>
             </button>
           )}
 
-          {/* Home Button on the Top-Right as requested */}
+          {/* Home Button on the Top-Right as requested - Made Fully Responsive */}
           <button 
             onClick={() => navigate('/')}
-            className="px-3 py-1.5 bg-slate-800 border border-slate-700 hover:border-slate-600 text-white rounded-lg hover:bg-slate-700 text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all hidden sm:block"
+            className="px-2 py-1.5 sm:px-3 sm:py-1.5 bg-slate-800 border border-slate-700 hover:border-slate-600 text-white rounded-lg hover:bg-slate-700 text-[9px] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center gap-1 shrink-0 shadow-sm"
+            title="Go to Dashboard"
           >
-            Home Console
+            <Home className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-400" />
+            <span className="hidden xs:inline">Home</span>
           </button>
 
           {/* Operator Badge (Replaces any photo URLs / Unwanted Image) */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-black">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-[10px] sm:text-xs font-black">
               OP
             </div>
             <div className="hidden lg:block text-left">
