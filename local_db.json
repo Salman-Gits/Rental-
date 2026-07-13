@@ -2,9 +2,9 @@
   "users": [
     {
       "username": "admin",
-      "password": "admin123",
+      "password": "admin",
       "role": "Admin",
-      "fullName": "Admin Overseer",
+      "fullName": "System Administrator",
       "email": "admin@electrorent.com"
     }
   ],

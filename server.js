@@ -153,11 +153,59 @@ async function startServer() {
       password: newUser.password,
       role: newUser.role || "User",
       fullName: newUser.fullName || "Field Operator",
-      email: newUser.email || ""
+      email: newUser.email || "",
+      phone: newUser.phone || ""
     });
 
     await writeLocalDb(db);
     return res.status(210).json(newUser);
+  });
+
+  // 2.3 Update Operator / Profile details
+  app.put("/api/users/:username", async (req, res) => {
+    const username = req.params.username.toLowerCase();
+    const { fullName, password, email, phone, role } = req.body;
+    
+    const db = await readLocalDb();
+    const userIndex = db.users.findIndex(u => u.username.toLowerCase() === username);
+    if (userIndex === -1) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const original = db.users[userIndex];
+    db.users[userIndex] = {
+      ...original,
+      fullName: fullName !== undefined ? fullName : original.fullName,
+      password: password !== undefined ? password : original.password,
+      email: email !== undefined ? email : original.email,
+      phone: phone !== undefined ? phone : original.phone,
+      role: role !== undefined ? role : original.role
+    };
+
+    await writeLocalDb(db);
+    return res.json(db.users[userIndex]);
+  });
+
+  // 2.5 Get Operators List
+  app.get("/api/users", async (req, res) => {
+    const db = await readLocalDb();
+    res.json(db.users);
+  });
+
+  // 2.6 Delete Operator
+  app.delete("/api/users/:username", async (req, res) => {
+    const username = req.params.username.toLowerCase();
+    if (username === 'admin') {
+      return res.status(400).json({ message: "Cannot delete master System Administrator" });
+    }
+    const db = await readLocalDb();
+    const index = db.users.findIndex(u => u.username.toLowerCase() === username);
+    if (index === -1) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    db.users.splice(index, 1);
+    await writeLocalDb(db);
+    res.json({ message: `User ${username} successfully deleted.` });
   });
 
   // 3. Get Assets
@@ -291,7 +339,7 @@ async function startServer() {
 
   // 10. Checkout Dispatch Transaction
   app.post("/api/logs/checkout", async (req, res) => {
-    const { assetId, client, employee, projectSite, quantity, remarks, issuedBy } = req.body;
+    const { assetId, client, employee, projectSite, quantity, remarks, issuedBy, contactPhone, contactEmail, expectedReturnDate } = req.body;
 
     const db = await readLocalDb();
     const assetIndex = db.assets.findIndex(a => a.id === parseInt(assetId));
@@ -336,7 +384,10 @@ async function startServer() {
       issuedBy: issuedBy || "Operations Terminal",
       daysUsed: null,
       status: "Active",
-      remarks: remarks || `Issued to client ${client}.`
+      remarks: remarks || `Issued to client ${client}.`,
+      contactPhone: contactPhone || "",
+      contactEmail: contactEmail || "",
+      expectedReturnDate: expectedReturnDate || ""
     };
 
     db.logs.unshift(newLog);
@@ -347,7 +398,7 @@ async function startServer() {
   // 11. Checkin Return Transaction
   app.post("/api/logs/checkin/:id", async (req, res) => {
     const logId = parseInt(req.params.id);
-    const { returnedBy, receivedBy, toolCondition, remarks, maintenanceRequired } = req.body;
+    const { returnedBy, receivedBy, toolCondition, remarks, maintenanceRequired, returnPhone, returnEmail } = req.body;
 
     const db = await readLocalDb();
     const logIndex = db.logs.findIndex(l => l.id === logId);
@@ -389,6 +440,8 @@ async function startServer() {
     log.status = "Returned";
     log.daysUsed = calculatedDays;
     log.remarks = log.remarks + " | Return Notes: " + (remarks || "No additional comments.");
+    log.returnPhone = returnPhone || "";
+    log.returnEmail = returnEmail || "";
 
     await writeLocalDb(db);
     res.json(log);

@@ -11,6 +11,7 @@ import CheckoutPage from './components/CheckoutPage';
 import CheckInPage from './components/CheckInPage';
 import HistoryPage from './components/HistoryPage';
 import LoginPage from './components/LoginPage';
+import NotificationSimulator from './components/NotificationSimulator';
 
 function AppContent() {
   const { isLoading } = useApp();
@@ -151,6 +152,7 @@ function AppContent() {
         </footer>
 
         {/* Interactive action notifications */}
+        <NotificationSimulator />
         <Toaster position="bottom-right" richColors theme="light" />
       </div>
     </BrowserRouter>

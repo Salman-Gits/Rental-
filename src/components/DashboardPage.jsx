@@ -14,7 +14,14 @@ import {
   User, 
   MapPin, 
   Calendar,
-  HelpCircle
+  HelpCircle,
+  Bell,
+  Mail,
+  Smartphone,
+  Send,
+  RefreshCw,
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -31,7 +38,163 @@ import {
 } from 'recharts';
 
 export default function DashboardPage() {
-  const { assets, logs } = useApp();
+  const { assets, logs, role, users, addUser, updateUser, deleteUser, currentUser, triggerNotification } = useApp();
+
+  const [scanning, setScanning] = React.useState(false);
+  const [scanResult, setScanResult] = React.useState([]);
+  const [hasScanned, setHasScanned] = React.useState(false);
+
+  const [profileEmail, setProfileEmail] = React.useState(currentUser?.email || '');
+  const [profilePhone, setProfilePhone] = React.useState(currentUser?.phone || '');
+  const [updatingProfile, setUpdatingProfile] = React.useState(false);
+
+  React.useEffect(() => {
+    if (currentUser) {
+      setProfileEmail(currentUser.email || '');
+      setProfilePhone(currentUser.phone || '');
+    }
+  }, [currentUser]);
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setUpdatingProfile(true);
+    await updateUser(currentUser.username, {
+      email: profileEmail,
+      phone: profilePhone
+    });
+    setUpdatingProfile(false);
+  };
+
+  const calculateAlertStatus = (log) => {
+    if (!log.expectedReturnDate) {
+      // Treat as standard 7-day lease if expectedReturnDate is blank
+      const checkout = new Date(log.checkoutDate);
+      const today = new Date();
+      checkout.setHours(0,0,0,0);
+      today.setHours(0,0,0,0);
+      const returnDate = new Date(checkout);
+      returnDate.setDate(checkout.getDate() + 7);
+      
+      const diffTime = returnDate - today;
+      const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (remainingDays < 0) {
+        return { status: 'Overdue', days: Math.abs(remainingDays) };
+      } else if (remainingDays <= 2) {
+        return { status: 'Nearing Completion', days: remainingDays };
+      }
+      return { status: 'Normal', days: remainingDays };
+    }
+
+    const expected = new Date(log.expectedReturnDate);
+    const today = new Date();
+    expected.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    
+    const diffTime = expected - today;
+    const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (remainingDays < 0) {
+      return { status: 'Overdue', days: Math.abs(remainingDays) };
+    } else if (remainingDays <= 3) {
+      return { status: 'Nearing Completion', days: remainingDays };
+    }
+    return { status: 'Normal', days: remainingDays };
+  };
+
+  const runAlertsScan = () => {
+    setScanning(true);
+    setHasScanned(true);
+    setTimeout(() => {
+      const activeLeases = logs.filter(l => l.status === "Active");
+      const analyzed = activeLeases.map(log => {
+        const info = calculateAlertStatus(log);
+        return {
+          ...log,
+          alertStatus: info.status,
+          remainingDays: info.days
+        };
+      }).filter(l => l.alertStatus === 'Overdue' || l.alertStatus === 'Nearing Completion');
+      
+      setScanResult(analyzed);
+      setScanning(false);
+    }, 1000);
+  };
+
+  const handleSendAlert = (log, channel, overrideStatus = null) => {
+    const info = calculateAlertStatus(log);
+    const alertType = overrideStatus || info.status;
+    const recipient = channel === 'SMS' 
+      ? (log.contactPhone || '+1 (555) 928-1029') 
+      : (log.contactEmail || `${log.employee?.toLowerCase().replace(/\s+/g, '') || 'operator'}@electrorent-partner.com`);
+
+    const title = channel === 'SMS' 
+      ? `🚨 ELECTRORENT DISPATCH ALERT` 
+      : `🚨 ElectroRent Rental Expiring Notification`;
+
+    const body = channel === 'SMS'
+      ? `RENTAL STATUS ALERT: Your checkout of ${log.quantity}x ${log.assetName} (${log.barcode}) is ${alertType.toUpperCase()}. Please return it to avoid service delays.`
+      : `Dear ${log.employee || 'Operator'},\n\nThis is an automated notification regarding your current equipment rental:\n\n• Asset Item: ${log.assetName}\n• Barcode ID: ${log.barcode}\n• Quantity Deployed: ${log.quantity}x\n• Client / Contractor: ${log.client}\n• Deployment Location: ${log.projectSite || 'Central Depot'}\n\nStatus Alert: ${alertType === 'Overdue' ? '🚨 OVERDUE' : '⚠️ NEARING COMPLETION'}\nExpected return: ${log.expectedReturnDate || '7-day standard cycle'}.\n\nPlease arrange return with the dispatch terminal to clear this voucher.\n\nThank you,\nElectroRent Operations Management`;
+
+    triggerNotification({
+      type: 'alert',
+      recipient,
+      title,
+      body,
+      channel
+    });
+  };
+
+  const handleBulkNotify = () => {
+    if (scanResult.length === 0) return;
+    
+    // Notify first one in simulated UI, then toast-notify the rest
+    const first = scanResult[0];
+    handleSendAlert(first, 'Email');
+    
+    // Toast others
+    import('sonner').then(({ toast }) => {
+      toast.success(`Successfully processed ${scanResult.length} automated alerts!`);
+      scanResult.slice(1).forEach(log => {
+        const channel = log.contactEmail ? 'Email' : 'SMS';
+        const recipient = channel === 'Email' ? log.contactEmail : log.contactPhone;
+        toast.info(`Dispatched alert to ${log.employee || 'Operator'} (${recipient || 'Default Contact'})`);
+      });
+    });
+  };
+
+  const [newUserName, setNewUserName] = React.useState('');
+  const [newUserFullName, setNewUserFullName] = React.useState('');
+  const [newUserPassword, setNewUserPassword] = React.useState('');
+  const [newUserEmail, setNewUserEmail] = React.useState('');
+  const [newUserPhone, setNewUserPhone] = React.useState('');
+  const [newUserRole, setNewUserRole] = React.useState('User');
+  const [isAddingUser, setIsAddingUser] = React.useState(false);
+
+  const handleRegisterUser = async (e) => {
+    e.preventDefault();
+    if (!newUserFullName || !newUserName || !newUserPassword) {
+      return;
+    }
+    const success = await addUser({
+      username: newUserName,
+      fullName: newUserFullName,
+      password: newUserPassword,
+      role: newUserRole,
+      email: newUserEmail,
+      phone: newUserPhone
+    });
+    if (success) {
+      setNewUserName('');
+      setNewUserFullName('');
+      setNewUserPassword('');
+      setNewUserEmail('');
+      setNewUserPhone('');
+      setNewUserRole('User');
+      setIsAddingUser(false);
+    }
+  };
 
   // Metrics calculation
   const totalToolsCount = assets.reduce((sum, a) => sum + a.quantity, 0);
@@ -53,8 +216,20 @@ export default function DashboardPage() {
     .filter(a => a.status === 'Lost')
     .reduce((sum, a) => sum + a.quantity, 0);
 
-  const recentCheckouts = logs.filter(l => l.status === "Active");
-  const recentCheckins = logs.filter(l => l.status === "Completed");
+  const userLogs = role === 'Admin' 
+    ? logs 
+    : logs.filter(log => {
+        const name = currentUser?.fullName?.toLowerCase();
+        if (!name) return false;
+        return (
+          (log.employee && log.employee.toLowerCase() === name) ||
+          (log.returnedBy && log.returnedBy.toLowerCase() === name) ||
+          (log.issuedBy && log.issuedBy.toLowerCase() === name)
+        );
+      });
+
+  const recentCheckouts = userLogs.filter(l => l.status === "Active");
+  const recentCheckins = userLogs.filter(l => l.status === "Completed");
 
   // Recharts: Asset Status Distribution Data
   const statusData = [
@@ -134,21 +309,73 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-fade-in px-2">
-      {/* Welcome Banner */}
-      <div className="bg-slate-900 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl border border-slate-800">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl -ml-20 -mb-20"></div>
-        <div className="relative z-10 space-y-2">
-          <span className="text-xs font-black uppercase tracking-widest text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
-            Operations Console
-          </span>
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase">
-            Asset Dispatch & Analytics
-          </h1>
-          <p className="text-slate-400 text-xs sm:text-sm font-medium max-w-xl">
-            Real-time visual monitoring of high-end electronics, power tools, and industrial instrumentation fleet.
-          </p>
+      {/* Top Banner & Profile Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Welcome Banner */}
+        <div className="lg:col-span-2 bg-slate-900 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl border border-slate-800 flex flex-col justify-center min-h-[220px]">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl -ml-20 -mb-20"></div>
+          <div className="relative z-10 space-y-2">
+            <span className="text-xs font-black uppercase tracking-widest text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 inline-block">
+              Operations Console
+            </span>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase">
+              {currentUser ? `Welcome back, ${currentUser.fullName}` : 'Asset Dispatch & Analytics'}
+            </h1>
+            <p className="text-slate-400 text-xs sm:text-sm font-medium max-w-xl">
+              {currentUser 
+                ? `Logged in as ${currentUser.role}. Update your profile on the right with your phone number and email to receive real-time dispatch alerts and confirmation logs.` 
+                : 'Real-time visual monitoring of high-end electronics, power tools, and industrial instrumentation fleet.'}
+            </p>
+          </div>
         </div>
+
+        {/* My Notification & Contact Profile */}
+        {currentUser && (
+          <form onSubmit={handleUpdateProfile} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
+                <User className="h-4 w-4 text-blue-600" />
+                My Dispatch Credentials
+              </h3>
+              <p className="text-[10px] text-slate-400 font-semibold leading-tight">
+                Used to dispatch real-time SMS and Email alerts during asset checkout/returns.
+              </p>
+            </div>
+
+            <div className="space-y-3 flex-1 pt-1">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">My Registered Email</label>
+                <input 
+                  type="email"
+                  placeholder="No email registered yet"
+                  value={profileEmail}
+                  onChange={(e) => setProfileEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">My Phone / SMS Number</label>
+                <input 
+                  type="tel"
+                  placeholder="e.g. +1 (555) 019-2831"
+                  value={profilePhone}
+                  onChange={(e) => setProfilePhone(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={updatingProfile}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md cursor-pointer"
+            >
+              {updatingProfile ? 'Saving Details...' : 'Save Contact Profile'}
+            </button>
+          </form>
+        )}
       </div>
 
       {/* Stats Grid */}
@@ -271,21 +498,64 @@ export default function DashboardPage() {
             <p className="text-xs text-slate-400 py-6 text-center">No active tools deployed currently.</p>
           ) : (
             <div className="space-y-3.5 max-h-72 overflow-y-auto pr-1">
-              {recentCheckouts.slice(0, 5).map((log, idx) => (
-                <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full mt-1 shrink-0" />
-                  <div className="flex-1 space-y-1">
-                    <div className="flex justify-between">
-                      <h4 className="text-xs font-black text-slate-800 leading-none">{log.assetName}</h4>
-                      <span className="text-[9px] font-bold text-slate-400">{log.checkoutDate}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 font-medium">
-                      <span className="flex items-center gap-1"><User className="h-3 w-3 text-slate-400" /> {log.employee} ({log.client})</span>
-                      <span className="flex items-center gap-1"><MapPin className="h-3 w-3 text-slate-400" /> {log.projectSite}</span>
+              {recentCheckouts.slice(0, 5).map((log, idx) => {
+                const info = calculateAlertStatus(log);
+                return (
+                  <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
+                      info.status === 'Overdue' ? 'bg-red-500 animate-pulse' :
+                      info.status === 'Nearing Completion' ? 'bg-amber-500 animate-pulse' : 'bg-blue-500'
+                    }`} />
+                    <div className="flex-1 space-y-1">
+                      <div className="flex justify-between items-start gap-2">
+                        <h4 className="text-xs font-black text-slate-800 leading-none">{log.assetName}</h4>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {info.status === 'Overdue' && (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-100 text-red-700 border border-red-200">
+                              Overdue {info.days}d
+                            </span>
+                          )}
+                          {info.status === 'Nearing Completion' && (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">
+                              Expiring {info.days}d
+                            </span>
+                          )}
+                          {info.status === 'Normal' && (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
+                              Active {info.days}d
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 font-medium">
+                          <span className="flex items-center gap-1"><User className="h-3 w-3 text-slate-400" /> {log.employee} ({log.client})</span>
+                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3 text-slate-400" /> {log.projectSite}</span>
+                        </div>
+                        {role === 'Admin' && (
+                          <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-100 shadow-2xs">
+                            <span className="text-[8px] text-slate-400 font-black uppercase mr-1">Alert:</span>
+                            <button 
+                              onClick={() => handleSendAlert(log, 'SMS')} 
+                              className="p-1 hover:bg-blue-50 hover:text-blue-600 text-slate-400 rounded transition-all cursor-pointer" 
+                              title="Simulate SMS Alert"
+                            >
+                              <Smartphone className="h-3 w-3" />
+                            </button>
+                            <button 
+                              onClick={() => handleSendAlert(log, 'Email')} 
+                              className="p-1 hover:bg-emerald-50 hover:text-emerald-600 text-slate-400 rounded transition-all cursor-pointer" 
+                              title="Simulate Email Alert"
+                            >
+                              <Mail className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -321,6 +591,326 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Automated Rental Alerts & Notification Hub */}
+      {role === 'Admin' && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 mt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+              <Bell className="h-4 w-4 text-blue-600 animate-bounce" />
+              Automated Rental Alerts & Dispatch Notification Hub
+            </h3>
+            <p className="text-xs text-slate-400 font-semibold mt-1">
+              Identify nearing completion or overdue equipment leases and trigger automated client notifications
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={runAlertsScan}
+              disabled={scanning}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white disabled:opacity-50 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
+              {scanning ? 'Scanning...' : 'Scan Active Leases'}
+            </button>
+            {scanResult.length > 0 && (
+              <button
+                onClick={handleBulkNotify}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Send className="h-3.5 w-3.5" />
+                Auto-Notify All ({scanResult.length})
+              </button>
+            )}
+          </div>
+        </div>
+
+        {scanning ? (
+          <div className="py-12 text-center space-y-3">
+            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p className="text-xs font-black text-slate-500 uppercase tracking-widest animate-pulse">Running System Registry Diagnostic...</p>
+          </div>
+        ) : hasScanned ? (
+          scanResult.length === 0 ? (
+            <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-6 text-center space-y-1.5 animate-fade-in">
+              <p className="text-xs font-black text-emerald-800 uppercase tracking-widest flex items-center justify-center gap-1.5">
+                <Check className="h-4 w-4 text-emerald-600 stroke-[3]" />
+                Fleet Alert Registry Clean
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                No active leases are currently overdue or within their 3-day return buffer window. All operators are fully compliant.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 animate-fade-in">
+              <div className="bg-amber-50/40 border border-amber-100 p-4 rounded-xl text-[11px] text-amber-800 font-bold flex items-start gap-2.5">
+                <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="uppercase tracking-wider">Diagnostic Scan Completed</p>
+                  <p className="text-slate-500 font-semibold mt-0.5">
+                    Found <span className="text-amber-800 font-extrabold">{scanResult.length} critical rental records</span> requiring immediate operational dispatch alert. You can trigger SMS or Email reminders below.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="w-full text-left border-collapse text-xs font-bold text-slate-600">
+                  <thead>
+                    <tr className="bg-slate-50 text-[9px] font-black uppercase tracking-wider border-b border-slate-100 text-slate-400">
+                      <th className="py-3 px-4">Lease Item</th>
+                      <th className="py-3 px-4">Operator Contact</th>
+                      <th className="py-3 px-4">Expected Return</th>
+                      <th className="py-3 px-4">Severity / Buffer</th>
+                      <th className="py-3 px-4 text-right">Dispatch Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {scanResult.map((log) => {
+                      const isOverdue = log.alertStatus === 'Overdue';
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50/40 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="font-extrabold text-slate-800 leading-none">{log.assetName}</div>
+                            <div className="text-[10px] text-slate-400 font-mono mt-1">Barcode: {log.barcode} &bull; {log.client}</div>
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-slate-500">
+                            <div>{log.employee}</div>
+                            <div className="text-[10px] text-slate-400 font-normal mt-0.5">
+                              {log.contactEmail || `${log.employee?.toLowerCase().replace(/\s+/g, '') || 'operator'}@electrorent.corp`}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-slate-500">
+                            {log.expectedReturnDate || '7-day cycle'}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                              isOverdue ? 'bg-red-50 text-red-700 border border-red-100 animate-pulse' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                            }`}>
+                              {isOverdue ? `Overdue by ${log.remainingDays}d` : `Expiring in ${log.remainingDays}d`}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleSendAlert(log, 'SMS')}
+                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+                              >
+                                Send SMS
+                              </button>
+                              <button
+                                onClick={() => handleSendAlert(log, 'Email')}
+                                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+                              >
+                                Send Email
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="py-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+            <Bell className="h-8 w-8 mx-auto text-slate-300 stroke-[1.5] mb-2 animate-pulse" />
+            <p className="text-xs font-black text-slate-700 uppercase tracking-wider">Notification Sub-System Idle</p>
+            <p className="text-[11px] text-slate-400 font-semibold mt-1">
+              Click the button above to execute a real-time scan of current active tool leases.
+            </p>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Admin Only: Staff & Operator Management */}
+      {role === 'Admin' && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 mt-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                Staff & Operator Credentials Management
+              </h3>
+              <p className="text-xs text-slate-400 font-semibold mt-1">
+                Register, authorize, and control credentials for platform operators
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAddingUser(!isAddingUser)}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-500/10 shrink-0 self-start sm:self-center cursor-pointer"
+            >
+              {isAddingUser ? "Hide Registration" : "+ Add Operator Account"}
+            </button>
+          </div>
+
+          {/* Registration Form */}
+          {isAddingUser && (
+            <form onSubmit={handleRegisterUser} className="bg-slate-50 border border-slate-100 p-5 rounded-2xl space-y-4">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                Create New Operator
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Alex Rivera"
+                    value={newUserFullName}
+                    onChange={(e) => setNewUserFullName(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Login Username
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. alexr"
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Login Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={newUserPassword}
+                    onChange={(e) => setNewUserPassword(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Assigned Access Level
+                  </label>
+                  <select
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all"
+                  >
+                    <option value="User">User (Standard Operator)</option>
+                    <option value="Admin">Admin (Full Console Access)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 pt-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Contact Email Address (Optional)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="e.g. alex.rivera@company.com"
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Contact Phone Number / SMS Target (Optional)
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. +1 (555) 019-2831"
+                    value={newUserPhone}
+                    onChange={(e) => setNewUserPhone(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  Create Identity Credentials
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* User List */}
+          <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="p-3.5 font-black uppercase tracking-widest text-slate-400 text-[10px]">Staff Operator</th>
+                  <th className="p-3.5 font-black uppercase tracking-widest text-slate-400 text-[10px]">Username</th>
+                  <th className="p-3.5 font-black uppercase tracking-widest text-slate-400 text-[10px]">Password</th>
+                  <th className="p-3.5 font-black uppercase tracking-widest text-slate-400 text-[10px]">Access Level</th>
+                  <th className="p-3.5 font-black uppercase tracking-widest text-slate-400 text-[10px] text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                {users && users.map((u) => (
+                  <tr key={u.id || u.username} className="hover:bg-slate-50/50 transition-all">
+                    <td className="p-3.5 font-black text-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-black text-[10px] shrink-0">
+                          {u.fullName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div>{u.fullName}</div>
+                          <div className="text-[10px] text-slate-400 font-semibold flex flex-wrap gap-x-2">
+                            {u.email && <span>📧 {u.email}</span>}
+                            {u.phone && <span>📱 {u.phone}</span>}
+                            {!u.email && !u.phone && <span className="italic font-normal">No contact info saved</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-3.5 font-bold text-slate-500">{u.username}</td>
+                    <td className="p-3.5 font-mono text-slate-400 tracking-wider">
+                      {role === 'Admin' ? u.password : '••••••••'}
+                    </td>
+                    <td className="p-3.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${
+                        u.role === 'Admin' 
+                          ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' 
+                          : 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                      }`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-right">
+                      {u.id !== 'usr-001' && u.username !== 'admin' ? (
+                        <button
+                          type="button"
+                          onClick={() => deleteUser(u.id || u.username)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all cursor-pointer"
+                          title="Revoke access and delete account"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest pr-2">
+                          Protected System Admin
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,11 +17,13 @@ import {
   Clock, 
   ShieldAlert,
   ChevronRight,
-  Camera
+  Camera,
+  Phone,
+  Mail
 } from 'lucide-react';
 
 export default function CheckoutPage() {
-  const { assets, checkoutAsset, role } = useApp();
+  const { assets, checkoutAsset, role, users, currentUser } = useApp();
   const navigate = useNavigate();
 
   // Live Camera Scanner State
@@ -36,7 +38,10 @@ export default function CheckoutPage() {
     quantity: '1',
     toolCondition: 'Excellent',
     expectedReturnDate: '',
-    remarks: ''
+    remarks: '',
+    issuedBy: currentUser?.fullName || '',
+    contactPhone: '',
+    contactEmail: ''
   });
 
   const [selectedAsset, setSelectedAsset] = useState(null);
@@ -51,12 +56,17 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const now = new Date();
+    const currentName = currentUser?.fullName || (role === 'Admin' ? 'System Administrator' : 'Standard Operator');
     setAutoFilled({
       date: now.toLocaleDateString(),
       time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      issuedBy: role === 'Admin' ? 'John Doe (Admin)' : 'Standard Operator'
+      issuedBy: currentName
     });
-  }, [role]);
+    setFormData(prev => ({
+      ...prev,
+      issuedBy: prev.issuedBy || currentName
+    }));
+  }, [role, currentUser]);
 
   // When barcode changes, find corresponding asset
   useEffect(() => {
@@ -228,15 +238,85 @@ export default function CheckoutPage() {
 
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Employee Name / Recipient</label>
+                <div className="grid grid-cols-1 gap-2">
+                  <select
+                    name="employee_select"
+                    value={formData.employee === '' ? '' : (users && users.some(u => u.fullName === formData.employee) ? formData.employee : 'CUSTOM')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'CUSTOM') {
+                        setFormData(prev => ({ ...prev, employee: 'Custom Operator', contactPhone: '', contactEmail: '' }));
+                      } else {
+                        const matchedUser = users && users.find(u => u.fullName === val);
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          employee: val,
+                          contactEmail: matchedUser?.email || '',
+                          contactPhone: matchedUser?.phone || ''
+                        }));
+                      }
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                  >
+                    <option value="">-- Select Recipient / User --</option>
+                    {users && users.map(u => (
+                      <option key={u.id || u.username} value={u.fullName}>
+                        {u.fullName} ({u.role})
+                      </option>
+                    ))}
+                    <option value="CUSTOM">-- Type Custom/Other Recipient --</option>
+                  </select>
+
+                  {/* Manual input if CUSTOM is chosen */}
+                  {formData.employee !== '' && (!users || !users.some(u => u.fullName === formData.employee)) && (
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400 animate-fade-in">
+                        <User className="h-4 w-4" />
+                      </div>
+                      <input 
+                        type="text"
+                        name="employee"
+                        placeholder="Type manual recipient name..."
+                        value={formData.employee === 'Custom Operator' ? '' : formData.employee}
+                        onChange={handleChange}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all animate-fade-in"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Recipient Contact Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 border-t border-dashed border-slate-100 pt-2">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Recipient Phone (Optional)</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
-                    <User className="h-4 w-4" />
+                    <Phone className="h-4 w-4" />
                   </div>
                   <input 
-                    type="text"
-                    name="employee"
-                    placeholder="e.g. Sarah Connor"
-                    value={formData.employee}
+                    type="tel"
+                    name="contactPhone"
+                    placeholder="e.g. +1 (555) 019-2834"
+                    value={formData.contactPhone}
+                    onChange={handleChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Recipient Email (Optional)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="h-4 w-4" />
+                  </div>
+                  <input 
+                    type="email"
+                    name="contactEmail"
+                    placeholder="e.g. name@company.com"
+                    value={formData.contactEmail}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all"
                   />
@@ -324,11 +404,29 @@ export default function CheckoutPage() {
               />
             </div>
 
+            {/* Authorized / Issued By Selection */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Authorized / Issued By *</label>
+              <select
+                name="issuedBy"
+                value={formData.issuedBy}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+              >
+                <option value="">-- Choose Issuing User --</option>
+                {users && users.map(u => (
+                  <option key={u.id || u.username} value={u.fullName}>
+                    {u.fullName} ({u.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Auto-filled Section */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-wrap gap-x-6 gap-y-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
               <div>AUTO-DATE: <span className="text-slate-600 font-bold">{autoFilled.date}</span></div>
               <div>AUTO-TIME: <span className="text-slate-600 font-bold">{autoFilled.time}</span></div>
-              <div>AUTHORIZED BY: <span className="text-blue-600 font-extrabold">{autoFilled.issuedBy}</span></div>
+              <div>AUTHORIZED BY: <span className="text-blue-600 font-extrabold">{formData.issuedBy || 'Not Specified'}</span></div>
             </div>
           </div>
         </form>

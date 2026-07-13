@@ -19,7 +19,7 @@ import {
 import { Button } from './ui/button';
 
 export default function HistoryPage() {
-  const { logs, assets, role } = useApp();
+  const { logs, assets, role, currentUser } = useApp();
 
   // Search & Filtering States
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,43 +33,79 @@ export default function HistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  if (role !== 'Admin') {
+  if (role !== 'Admin' && !currentUser) {
     return (
       <div className="bg-white border border-slate-100 rounded-3xl shadow-xl p-12 text-center max-w-lg mx-auto my-12 animate-fade-in">
-        <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
+        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100">
           <History className="h-8 w-8" />
         </div>
-        <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">Admin Access Required</h2>
-        <p className="text-xs text-slate-500 font-semibold mt-1 uppercase tracking-wider">Security Clearance Level Unauthorized</p>
+        <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">Authentication Required</h2>
+        <p className="text-xs text-slate-500 font-semibold mt-1 uppercase tracking-wider">Access Restricted to Registered Operators</p>
         <p className="text-xs text-slate-400 font-semibold mt-4 leading-relaxed">
-          The operations logs ledger contains sensitive deployment data and transaction records. 
-          Please authenticate as an Administrator to view and download reports.
+          Please log in with your staff operator credentials to view your check-out and check-in details.
         </p>
+        <div className="mt-6">
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="inline-block px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md shadow-blue-500/10 cursor-pointer"
+          >
+            Go to Login Portal
+          </button>
+        </div>
       </div>
     );
   }
 
-  // Derive unique dropdown filter options from logs
-  const assetsInLogs = ['All', ...new Set(logs.map(l => l.assetName))];
-  const clientsInLogs = ['All', ...new Set(logs.map(l => l.client))];
-  const employeesInLogs = ['All', ...new Set(logs.map(l => l.employee).filter(Boolean))];
+  // Filter logs based on user's identity if role is 'User'
+  const baseLogs = role === 'Admin' 
+    ? logs 
+    : logs.filter(log => {
+        const name = currentUser?.fullName?.toLowerCase();
+        if (!name) return false;
+        return (
+          (log.employee && log.employee.toLowerCase() === name) ||
+          (log.returnedBy && log.returnedBy.toLowerCase() === name) ||
+          (log.issuedBy && log.issuedBy.toLowerCase() === name)
+        );
+      });
+
+  // Derive unique dropdown filter options from baseLogs
+  const assetsInLogs = ['All', ...new Set(baseLogs.map(l => l.assetName))];
+  const clientsInLogs = ['All', ...new Set(baseLogs.map(l => l.client))];
+  const employeesInLogs = ['All', ...new Set(baseLogs.map(l => l.employee).filter(Boolean))];
 
   // Filtering Logic
-  const filteredLogs = logs.filter(log => {
-    // Search query matches Log ID, Barcode, Asset Name, Client, Employee, Site, Handled By
+  const filteredLogs = baseLogs.filter(log => {
+    // Safely convert all fields to lowercase strings to prevent crash with numbers/undefined
+    const logId = log.id ? String(log.id).toLowerCase() : '';
+    const barcode = log.barcode ? String(log.barcode).toLowerCase() : '';
+    const assetName = log.assetName ? String(log.assetName).toLowerCase() : '';
+    const client = log.client ? String(log.client).toLowerCase() : '';
+    const employee = log.employee ? String(log.employee).toLowerCase() : '';
+    const projectSite = log.projectSite ? String(log.projectSite).toLowerCase() : '';
+    const issuedBy = log.issuedBy ? String(log.issuedBy).toLowerCase() : '';
+    const receivedBy = log.receivedBy ? String(log.receivedBy).toLowerCase() : '';
+    const returnedBy = log.returnedBy ? String(log.returnedBy).toLowerCase() : '';
+    const remarks = log.remarks ? String(log.remarks).toLowerCase() : '';
+    
+    const query = searchQuery.toLowerCase();
+
     const matchesSearch = 
-      log.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.barcode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.assetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.employee && log.employee.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (log.projectSite && log.projectSite.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      log.handledBy.toLowerCase().includes(searchQuery.toLowerCase());
+      logId.includes(query) ||
+      barcode.includes(query) ||
+      assetName.includes(query) ||
+      client.includes(query) ||
+      employee.includes(query) ||
+      projectSite.includes(query) ||
+      issuedBy.includes(query) ||
+      receivedBy.includes(query) ||
+      returnedBy.includes(query) ||
+      remarks.includes(query);
 
     // Date matching (Checks if logs' checkout or checkin date starts with selected date)
     const matchesDate = !filterDate || 
-      log.checkoutDate.includes(filterDate) || 
-      (log.checkinDate && log.checkinDate.includes(filterDate));
+      (log.checkoutDate && String(log.checkoutDate).includes(filterDate)) || 
+      (log.checkinDate && String(log.checkinDate).includes(filterDate));
 
     const matchesAsset = filterAsset === 'All' || log.assetName === filterAsset;
     const matchesClient = filterClient === 'All' || log.client === filterClient;
@@ -359,6 +395,17 @@ export default function HistoryPage() {
         </div>
       </div>
 
+      {role === 'User' && currentUser && (
+        <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-4 flex items-center gap-3 text-xs text-blue-700 font-bold shadow-sm">
+          <Info className="h-5 w-5 text-blue-500 shrink-0" />
+          <div>
+            <span>Standard Operator Mode: displaying transaction logs associated with </span>
+            <span className="underline decoration-wavy decoration-blue-300 font-black text-blue-800">{currentUser.fullName}</span>
+            <span>.</span>
+          </div>
+        </div>
+      )}
+
       {/* Advanced Filters Toolbar */}
       <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -519,7 +566,15 @@ export default function HistoryPage() {
                       <td className="py-4 px-4 font-semibold text-slate-800">{log.client}</td>
 
                       {/* Employee */}
-                      <td className="py-4 px-4 font-semibold text-slate-500">{log.employee || 'N/A'}</td>
+                      <td className="py-4 px-4 font-semibold text-slate-500">
+                        <div>{log.employee || 'N/A'}</div>
+                        {(log.contactPhone || log.contactEmail) && (
+                          <div className="text-[10px] text-slate-400 mt-0.5 space-y-0.5 font-normal">
+                            {log.contactPhone && <div className="flex items-center gap-1">📞 {log.contactPhone}</div>}
+                            {log.contactEmail && <div className="flex items-center gap-1 truncate max-w-[140px]" title={log.contactEmail}>✉️ {log.contactEmail}</div>}
+                          </div>
+                        )}
+                      </td>
 
                       {/* Project Site */}
                       <td className="py-4 px-4 font-semibold text-slate-400 truncate max-w-[140px]" title={log.projectSite}>{log.projectSite || 'Central Store'}</td>
@@ -535,9 +590,22 @@ export default function HistoryPage() {
                       {/* Return Condition */}
                       <td className="py-4 px-4">
                         {log.returnedCondition ? (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${log.returnedCondition === 'Needs Repair' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
-                            {log.returnedCondition}
-                          </span>
+                          <div>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${log.returnedCondition === 'Needs Repair' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                              {log.returnedCondition}
+                            </span>
+                            {log.returnedBy && (
+                              <div className="text-[10px] text-slate-500 mt-1 font-bold">
+                                By: {log.returnedBy}
+                                {(log.returnPhone || log.returnEmail) && (
+                                  <div className="text-[9px] text-slate-400 font-normal mt-0.5 space-y-0.5">
+                                    {log.returnPhone && <div>📞 {log.returnPhone}</div>}
+                                    {log.returnEmail && <div className="truncate max-w-[120px]" title={log.returnEmail}>✉️ {log.returnEmail}</div>}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-slate-300 font-medium italic">Active Deployment</span>
                         )}

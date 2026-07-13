@@ -17,12 +17,14 @@ import {
   UserCheck,
   ChevronRight,
   ClipboardList,
-  Camera
+  Camera,
+  Phone,
+  Mail
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 
 export default function CheckInPage() {
-  const { logs, checkinAsset, role } = useApp();
+  const { logs, checkinAsset, role, users, currentUser } = useApp();
   const navigate = useNavigate();
 
   // Live Camera Scanner State
@@ -35,11 +37,19 @@ export default function CheckInPage() {
   const [formData, setFormData] = useState({
     barcode: '',
     returnedBy: '',
-    receivedBy: '',
+    receivedBy: currentUser?.fullName || '',
     toolCondition: 'Excellent',
     maintenanceRequired: 'No',
-    remarks: ''
+    remarks: '',
+    returnPhone: '',
+    returnEmail: ''
   });
+
+  useEffect(() => {
+    if (currentUser) {
+      setFormData(prev => ({ ...prev, receivedBy: prev.receivedBy || currentUser.fullName }));
+    }
+  }, [currentUser]);
 
   const [activeLog, setActiveLog] = useState(null);
   const [daysUsed, setDaysUsed] = useState(null);
@@ -62,7 +72,9 @@ export default function CheckInPage() {
         setActiveLog(log);
         setFormData(prev => ({
           ...prev,
-          returnedBy: log.employee || log.client || ''
+          returnedBy: log.employee || log.client || '',
+          returnPhone: log.contactPhone || '',
+          returnEmail: log.contactEmail || ''
         }));
 
         // Calculate days used
@@ -114,7 +126,7 @@ export default function CheckInPage() {
 
     const result = checkinAsset({
       ...formData,
-      receivedBy: role === 'Admin' ? 'John Doe (Admin)' : 'Standard Operator'
+      receivedBy: formData.receivedBy || (currentUser?.fullName || 'Standard Operator')
     });
 
     if (result && result.success) {
@@ -237,18 +249,51 @@ export default function CheckInPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Returned By *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
-                    <User className="h-4 w-4" />
-                  </div>
-                  <input 
-                    type="text"
-                    name="returnedBy"
-                    placeholder="Who brought it back?"
-                    value={formData.returnedBy}
-                    onChange={handleChange}
-                    className={`w-full bg-slate-50 border ${errors.returnedBy ? 'border-red-300' : 'border-slate-200'} rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all`}
-                  />
+                <div className="grid grid-cols-1 gap-2">
+                  <select
+                    name="returnedBy_select"
+                    value={formData.returnedBy === '' ? '' : (users && users.some(u => u.fullName === formData.returnedBy) ? formData.returnedBy : 'CUSTOM')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'CUSTOM') {
+                        setFormData(prev => ({ ...prev, returnedBy: 'Custom Operator', returnPhone: '', returnEmail: '' }));
+                      } else {
+                        const matchedUser = users && users.find(u => u.fullName === val);
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          returnedBy: val,
+                          returnEmail: matchedUser?.email || '',
+                          returnPhone: matchedUser?.phone || ''
+                        }));
+                      }
+                    }}
+                    className={`w-full bg-slate-50 border ${errors.returnedBy ? 'border-red-300' : 'border-slate-200'} rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all`}
+                  >
+                    <option value="">-- Select Operator User --</option>
+                    {users && users.map(u => (
+                      <option key={u.id || u.username} value={u.fullName}>
+                        {u.fullName} ({u.role})
+                      </option>
+                    ))}
+                    <option value="CUSTOM">-- Type Custom Operator Name --</option>
+                  </select>
+
+                  {/* Manual input if CUSTOM is chosen */}
+                  {formData.returnedBy !== '' && (!users || !users.some(u => u.fullName === formData.returnedBy)) && (
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400 animate-fade-in">
+                        <User className="h-4 w-4" />
+                      </div>
+                      <input 
+                        type="text"
+                        name="returnedBy"
+                        placeholder="Type manual returned by name..."
+                        value={formData.returnedBy === 'Custom Operator' ? '' : formData.returnedBy}
+                        onChange={handleChange}
+                        className={`w-full bg-slate-50 border ${errors.returnedBy ? 'border-red-300' : 'border-slate-200'} rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all animate-fade-in`}
+                      />
+                    </div>
+                  )}
                 </div>
                 {errors.returnedBy && <p className="text-[10px] font-bold text-red-500">{errors.returnedBy}</p>}
               </div>
@@ -266,6 +311,43 @@ export default function CheckInPage() {
                   <option value="Fair">Fair (Shows signs of wear)</option>
                   <option value="Needs Repair">Needs Repair (Broken / Damaged)</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Returner Contact Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 border-t border-dashed border-slate-100 pt-2 animate-fade-in">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Returner Phone (Optional)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                    <Phone className="h-4 w-4" />
+                  </div>
+                  <input 
+                    type="tel"
+                    name="returnPhone"
+                    placeholder="e.g. +1 (555) 019-2834"
+                    value={formData.returnPhone}
+                    onChange={handleChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Returner Email (Optional)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="h-4 w-4" />
+                  </div>
+                  <input 
+                    type="email"
+                    name="returnEmail"
+                    placeholder="e.g. name@company.com"
+                    value={formData.returnEmail}
+                    onChange={handleChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:bg-white transition-all"
+                  />
+                </div>
               </div>
             </div>
 
@@ -311,10 +393,28 @@ export default function CheckInPage() {
               />
             </div>
 
+            {/* Receiving Operator Selection */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Receiving Staff/Operator *</label>
+              <select
+                name="receivedBy"
+                value={formData.receivedBy}
+                onChange={handleChange}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+              >
+                <option value="">-- Choose Receiving Operator --</option>
+                {users && users.map(u => (
+                  <option key={u.id || u.username} value={u.fullName}>
+                    {u.fullName} ({u.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Auto-filled metadata */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-wrap gap-x-6 gap-y-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
               <div>RETURN DATE: <span className="text-slate-600 font-bold">{new Date().toLocaleDateString()}</span></div>
-              <div>RECEIVED BY: <span className="text-blue-600 font-extrabold">{role === 'Admin' ? 'John Doe (Admin)' : 'Standard Operator'}</span></div>
+              <div>RECEIVED BY: <span className="text-blue-600 font-extrabold">{formData.receivedBy || 'Not Specified'}</span></div>
               <div>STATION STATUS: <span className="text-emerald-600 font-black">Live & Connected</span></div>
             </div>
           </div>

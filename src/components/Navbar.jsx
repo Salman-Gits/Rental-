@@ -13,14 +13,22 @@ import {
   History, 
   Plus, 
   Compass,
-  Laptop
+  Laptop,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 
 export function Navbar() {
-  const { globalSearch, setGlobalSearch, role, setRole, currentUser, setCurrentUser } = useApp();
+  const { globalSearch, setGlobalSearch, role, setRole, currentUser, setCurrentUser, resetSystemData } = useApp();
   const navigate = useNavigate();
+
+  const handleReset = () => {
+    if (window.confirm("Are you sure you want to restore the entire system to default state? This will remove all created logs, added operator accounts, and custom tools.")) {
+      resetSystemData();
+      navigate('/');
+    }
+  };
 
   return (
     <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 shadow-md">
@@ -90,6 +98,16 @@ export function Navbar() {
           >
             <Home className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-400" />
             <span className="hidden xs:inline">Home</span>
+          </button>
+
+          {/* Reset App Button */}
+          <button 
+            onClick={handleReset}
+            className="px-2 py-1.5 sm:px-3 sm:py-1.5 bg-red-600/10 border border-red-500/20 text-red-400 hover:bg-red-600/20 rounded-lg text-[9px] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center gap-1 shrink-0 shadow-sm cursor-pointer"
+            title="Reset system to factory defaults"
+          >
+            <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-red-400" />
+            <span className="hidden xs:inline">Reset Website</span>
           </button>
 
           {/* Operator Badge (Replaces any photo URLs / Unwanted Image) */}
